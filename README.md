@@ -1,5 +1,9 @@
 ## About MeshCore
 
+> **Carpeater fork:** This companion firmware enables packet forwarding by default and repeats on the
+> build's standard `LORA_FREQ`. It remains usable as a normal BLE, USB, or Wi-Fi companion, and an
+> explicitly saved repeat setting is preserved across reboots.
+
 MeshCore is a lightweight, portable C++ library that enables multi-hop packet routing for embedded projects using LoRa and other packet radios. It is designed for developers who want to create resilient, decentralized communication networks that work without the internet.
 
 ## 🔍 What is MeshCore?
@@ -12,7 +16,7 @@ MeshCore provides the ability to create wireless mesh networks, similar to Mesht
 * Multi-Hop Packet Routing
   * Devices can forward messages across multiple nodes, extending range beyond a single radio's reach.
   * Supports up to a configurable number of hops to balance network efficiency and prevent excessive traffic.
-  * Nodes use fixed roles where "Companion" nodes are not repeating messages at all to prevent adverse routing paths from being used.
+  * Standard "Companion" firmware does not repeat; the Carpeater companion fork is the exception.
 * Supports LoRa Radios – Works with Heltec, RAK Wireless, and other LoRa-based hardware.
 * Decentralized & Resilient – No central server or internet required; the network is self-healing.
 * Low Power Consumption – Ideal for battery-powered or solar-powered devices.

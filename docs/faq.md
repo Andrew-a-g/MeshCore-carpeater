@@ -474,8 +474,9 @@ So, it's a balancing act between speed of the transmission and resistance to noi
 The Things Network is mainly focused on LoRaWAN, but the LoRa low-level stuff still checks out for any LoRa project
 
 ### 5.2. Q: Do MeshCore clients repeat?
-**A:** No, MeshCore clients do not repeat. This is the core of MeshCore's messaging-first design. This is to avoid devices flooding the airwaves and create endless collisions, so messages sent aren't received.
-In MeshCore, only repeaters and room servers with `set repeat on` repeat.
+**A:** Standard MeshCore clients do not repeat. This is the core of MeshCore's messaging-first design and avoids devices flooding the airwaves and creating collisions. Normally, only repeaters and room servers with `set repeat on` repeat.
+
+The Carpeater fork is an exception: its companion firmware repeats on the build's standard frequency by default while remaining usable as a normal companion.
 
 ### 5.3. Q: What happens when a node learns a route via a mobile repeater, and that repeater is gone?
 **A:** If you used to reach a node through a repeater and the repeater is no longer reachable, the client will send the message using the existing (but now broken) known path, the message will fail after 3 retries, and the app will reset the path and send the message as flood on the last retry by default. This can be turned off in settings. If the destination is reachable directly or through another repeater, the new path will be used going forward. Or you can set the path manually if you know a specific repeater to use to reach that destination.
@@ -562,12 +563,12 @@ Javascript: <https://github.com/liamcottle/meshcore.js>
 
 MeshCore would not be best suited to ATAK because MeshCore:
 
-- clients do not repeat and therefore you would need a network of repeaters in place
+- standard clients do not repeat and therefore you would need a network of repeaters in place
 - will not have a stable path where all clients are constantly moving between repeaters
 
 MeshCore clients would need to reset path constantly and flood traffic across the network which could lead to lots of collisions with something as chatty as ATAK.
 
-This could change in the future if MeshCore develops a client firmware that repeats.
+The Carpeater fork provides repeating companion firmware, but ATAK support is still not currently on MeshCore's roadmap.
 
 [Source](https://discord.com/channels/826570251612323860/1330643963501351004/1354780032140054659)
 
