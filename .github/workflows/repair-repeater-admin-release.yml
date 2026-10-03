@@ -1,0 +1,29 @@
+name: Repair Repeater Admin Release
+
+permissions:
+  contents: write
+
+on:
+  push:
+    tags:
+      - 'repair-repeater-admin-v1.0.0'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone Repo
+        uses: actions/checkout@v6
+      - name: Setup Build Environment
+        uses: ./.github/actions/setup-build-environment
+      - name: Build ThinkNode M8 firmware
+        run: ./build.sh build-firmware ThinkNode_M8_repeater
+      - name: Add repaired build to Repeater Admin release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: repeater-admin-v1.0.0
+          name: Repeater Admin Firmware v1.0.0
+          body: Experimental MeshCore repeater firmware with observed-channel reporting and persistent default-allow channel deny rules.
+          draft: false
+          fail_on_unmatched_files: true
+          files: ./out/*
