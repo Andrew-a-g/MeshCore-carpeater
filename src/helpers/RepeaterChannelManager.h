@@ -38,6 +38,7 @@ public:
   RepeaterChannelManager();
 
   static bool derivePublicChannel(const char* name, uint8_t key[CIPHER_KEY_SIZE], uint8_t* hash);
+  static bool isValidGroupPacket(const mesh::Packet* packet);
 
   void observe(uint8_t hash, uint32_t now);
   void clearSeen();

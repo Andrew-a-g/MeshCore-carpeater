@@ -36,10 +36,27 @@ TEST(RepeaterChannelManagerTest, RejectsInvalidPublicChannelNames) {
   uint8_t key[CIPHER_KEY_SIZE], hash;
   EXPECT_FALSE(RepeaterChannelManager::derivePublicChannel("test", key, &hash));
   EXPECT_FALSE(RepeaterChannelManager::derivePublicChannel("#", key, &hash));
-  EXPECT_FALSE(RepeaterChannelManager::derivePublicChannel("#bad name", key, &hash));
-  EXPECT_FALSE(RepeaterChannelManager::derivePublicChannel("#bad!", key, &hash));
+  EXPECT_TRUE(RepeaterChannelManager::derivePublicChannel("#space and punctuation!", key, &hash));
+  EXPECT_TRUE(RepeaterChannelManager::derivePublicChannel("#caf\xC3\xA9", key, &hash));
+  EXPECT_FALSE(RepeaterChannelManager::derivePublicChannel("#bad\nname", key, &hash));
+  EXPECT_FALSE(RepeaterChannelManager::derivePublicChannel("#bad\x7Fname", key, &hash));
   EXPECT_FALSE(RepeaterChannelManager::derivePublicChannel(
       "#1234567890123456789012345678901", key, &hash));
+}
+
+TEST(RepeaterChannelManagerTest, RejectsMalformedGroupPacketWireLengths) {
+  RepeaterChannelManager manager;
+  ASSERT_EQ(RepeaterChannelManager::ADD_OK, manager.addDenied("#test"));
+  mesh::Packet packet = groupPacket("#test");
+  ASSERT_TRUE(RepeaterChannelManager::isValidGroupPacket(&packet));
+
+  packet.payload_len--;
+  EXPECT_FALSE(RepeaterChannelManager::isValidGroupPacket(&packet));
+  EXPECT_FALSE(manager.shouldDeny(&packet));
+
+  packet = groupPacket("#test");
+  packet.payload_len = 1;
+  EXPECT_FALSE(RepeaterChannelManager::isValidGroupPacket(&packet));
 }
 
 TEST(RepeaterChannelManagerTest, TracksSortsSaturatesAndClearsSeenChannels) {

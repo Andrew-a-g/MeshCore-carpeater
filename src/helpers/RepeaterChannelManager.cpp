@@ -1,7 +1,6 @@
 #include "RepeaterChannelManager.h"
 
 #include <Utils.h>
-#include <ctype.h>
 #include <string.h>
 
 namespace {
@@ -19,9 +18,6 @@ uint32_t policyCrc32(const uint8_t* data, size_t length) {
   return ~crc;
 }
 
-bool validNameChar(char c) {
-  return isalnum(static_cast<unsigned char>(c)) || c == '-' || c == '_' || c == '.';
-}
 } // namespace
 
 RepeaterChannelManager::RepeaterChannelManager() {
@@ -35,11 +31,21 @@ bool RepeaterChannelManager::derivePublicChannel(const char* name, uint8_t key[C
   size_t len = strlen(name);
   if (len < 2 || len >= REPEATER_CHANNEL_NAME_SIZE) return false;
   for (size_t i = 1; i < len; i++) {
-    if (!validNameChar(name[i])) return false;
+    uint8_t value = static_cast<uint8_t>(name[i]);
+    if (value < 0x20 || value == 0x7F) return false;
   }
   mesh::Utils::sha256(key, CIPHER_KEY_SIZE, reinterpret_cast<const uint8_t*>(name), len);
   mesh::Utils::sha256(hash, 1, key, CIPHER_KEY_SIZE);
   return true;
+}
+
+bool RepeaterChannelManager::isValidGroupPacket(const mesh::Packet* packet) {
+  if (packet == NULL) return false;
+  uint8_t type = packet->getPayloadType();
+  if (type != PAYLOAD_TYPE_GRP_TXT && type != PAYLOAD_TYPE_GRP_DATA) return false;
+  if (packet->payload_len < 1 + CIPHER_MAC_SIZE + CIPHER_BLOCK_SIZE) return false;
+  size_t encryptedLength = packet->payload_len - 1 - CIPHER_MAC_SIZE;
+  return encryptedLength % CIPHER_BLOCK_SIZE == 0;
 }
 
 void RepeaterChannelManager::observe(uint8_t hash, uint32_t now) {
@@ -163,10 +169,7 @@ const char* RepeaterChannelManager::deniedNameForHash(uint8_t hash) const {
 
 bool RepeaterChannelManager::shouldDeny(const mesh::Packet* packet, const char** matchedName) const {
   if (matchedName) *matchedName = NULL;
-  if (packet == NULL) return false;
-  uint8_t type = packet->getPayloadType();
-  if (type != PAYLOAD_TYPE_GRP_TXT && type != PAYLOAD_TYPE_GRP_DATA) return false;
-  if (packet->payload_len < 1 + CIPHER_MAC_SIZE + CIPHER_BLOCK_SIZE) return false;
+  if (!isValidGroupPacket(packet)) return false;
 
   uint8_t scratch[MAX_PACKET_PAYLOAD];
   for (int i = 0; i < MAX_DENIED_CHANNELS; i++) {

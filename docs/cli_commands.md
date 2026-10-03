@@ -150,8 +150,8 @@ one-byte hashes can collide. Use the value in `next=<offset>` to request another
 **Usage:** `channel deny #name`
 
 Derives and persistently stores the public hashtag key. Example response: `OK - denied #test (D9)`.
-Adding an existing entry is idempotent. Names must begin with `#`, fit in 31 bytes, and contain only
-letters, digits, `-`, `_`, or `.` after the hash.
+Adding an existing entry is idempotent. Names must begin with `#`, fit in 31 bytes, and must not
+contain ASCII control characters. Spaces, punctuation, and UTF-8 bytes are hashed exactly as entered.
 
 ### Allow a previously denied channel
 

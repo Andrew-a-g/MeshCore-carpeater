@@ -493,7 +493,7 @@ bool MyMesh::allowPacketForward(const mesh::Packet *packet) {
   uint8_t type = packet->getPayloadType();
   if (packet->isRouteDirect() &&
       (type == PAYLOAD_TYPE_GRP_TXT || type == PAYLOAD_TYPE_GRP_DATA) &&
-      packet->payload_len > 0) {
+      RepeaterChannelManager::isValidGroupPacket(packet)) {
     channel_manager.observe(packet->payload[0], getRTCClock()->getCurrentTime());
     const char* matchedName;
     if (channel_manager.shouldDeny(packet, &matchedName)) {
@@ -527,9 +527,7 @@ bool MyMesh::allowPacketForward(const mesh::Packet *packet) {
 }
 
 bool MyMesh::filterRecvFloodPacket(mesh::Packet* packet) {
-  uint8_t type = packet->getPayloadType();
-  if (type != PAYLOAD_TYPE_GRP_TXT && type != PAYLOAD_TYPE_GRP_DATA) return false;
-  if (packet->payload_len == 0) return false;
+  if (!RepeaterChannelManager::isValidGroupPacket(packet)) return false;
 
   channel_manager.observe(packet->payload[0], getRTCClock()->getCurrentTime());
   const char* matchedName;
