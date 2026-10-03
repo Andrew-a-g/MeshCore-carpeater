@@ -8,7 +8,7 @@
 #endif
 
 enum class InterfaceType : uint8_t {
-  NONE,
+  None,
   Bluetooth,
   USB,
   WiFi,
@@ -20,7 +20,7 @@ class MultiSerialInterface : public BaseSerialInterface {
 private:
 
   struct RegisteredInterface {
-    InterfaceType type = InterfaceType::NONE;
+    InterfaceType type = InterfaceType::None;
     BaseSerialInterface* instance = nullptr;
   };
 

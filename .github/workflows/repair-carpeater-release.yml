@@ -1,0 +1,52 @@
+name: Repair Carpeater Release
+
+permissions:
+  contents: write
+
+on:
+  push:
+    tags:
+      - 'repair-carpeater-v1.0.0'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - Heltec_mesh_solar_companion_radio_usb
+          - Station_G2_companion_radio_ble
+          - Station_G3_ESP32_companion_radio_ble
+    steps:
+      - name: Clone Repo
+        uses: actions/checkout@v6
+      - name: Setup Build Environment
+        id: setup
+        uses: ./.github/actions/setup-build-environment
+      - name: Build Firmware
+        run: ./build.sh build-firmware ${{ matrix.target }}
+      - name: Upload Workflow Artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: firmware-${{ matrix.target }}
+          path: ./out/*
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Firmware Artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: firmware-*
+          path: ./release
+          merge-multiple: true
+      - name: Add repaired builds to Carpeater release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: carpeater-v1.0.0
+          draft: false
+          fail_on_unmatched_files: true
+          files: ./release/*
