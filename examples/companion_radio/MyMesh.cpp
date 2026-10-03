@@ -932,7 +932,7 @@ MyMesh::MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMe
   _prefs.radio_fem_txgain = 0;
 #endif
   //_prefs.rx_delay_base = 10.0f;  enable once new algo fixed
-  _prefs.setRepeatEn(false);
+  _prefs.setRepeatEn(true);
 #if defined(USE_SX1262) || defined(USE_SX1268)
 #ifdef SX126X_RX_BOOSTED_GAIN
   _prefs.rx_boosted_gain = SX126X_RX_BOOSTED_GAIN;
@@ -1029,14 +1029,11 @@ struct FreqRange {
   uint32_t lower_freq, upper_freq;
 };
 
+static constexpr uint32_t STANDARD_REPEAT_FREQ_KHZ =
+    static_cast<uint32_t>((LORA_FREQ * 1000.0f) + 0.5f);
+
 static FreqRange repeat_freq_ranges[] = {
-  #ifdef ALLOWED_REPEAT_FREQ_RANGE
-  ALLOWED_REPEAT_FREQ_RANGE
-  #else
-  { 433000, 433000 },
-  { 869495, 869495 },
-  { 918000, 918000 }
-  #endif
+  { STANDARD_REPEAT_FREQ_KHZ, STANDARD_REPEAT_FREQ_KHZ }
 };
 
 bool MyMesh::isValidClientRepeatFreq(uint32_t f) const {
@@ -1431,7 +1428,7 @@ void MyMesh::handleCmdFrame(size_t len) {
     i += 4;
     uint8_t sf = cmd_frame[i++];
     uint8_t cr = cmd_frame[i++];
-    uint8_t repeat = 0;  // default - false
+    uint8_t repeat = _prefs.isRepeatEn() ? 1 : 0;  // preserve state for clients older than protocol v9
     if (len > i) {
       repeat = cmd_frame[i++];   // FIRMWARE_VER_CODE  9+
     }

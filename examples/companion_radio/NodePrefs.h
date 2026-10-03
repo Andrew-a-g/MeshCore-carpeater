@@ -138,7 +138,7 @@ private:
 
   class RepeatPrefs : public ConfigSerializer {  // COPIED from CommonCLI (for now)
   public:
-    uint8_t disable_fwd = 1;
+    uint8_t disable_fwd = 0;
   protected:
     void structure() override {
       def("disable", disable_fwd);
