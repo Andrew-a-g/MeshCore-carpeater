@@ -95,8 +95,9 @@ jobs:
           draft="${{ inputs.release_draft }}"
 
           if gh release view "$tag" >/dev/null 2>&1; then
-            gh release edit "$tag" --title "$title" --draft="$draft"
-          elif [[ "$draft" == "true" ]]; then
+            gh release delete "$tag" --yes
+          fi
+          if [[ "$draft" == "true" ]]; then
             gh release create "$tag" --title "$title" --notes "" --draft
           else
             gh release create "$tag" --title "$title" --notes ""

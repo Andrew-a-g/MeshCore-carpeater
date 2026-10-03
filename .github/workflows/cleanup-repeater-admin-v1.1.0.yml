@@ -1,0 +1,43 @@
+name: Prune Repeater Admin v1.1.0 Assets
+
+permissions:
+  contents: write
+
+on:
+  push:
+    tags:
+      - 'cleanup-repeater-admin-v1.1.0-*'
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remove stale assets from the repaired release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          repository="$GITHUB_REPOSITORY"
+          release_tag="repeater-admin-v1.1.0"
+          keep_marker="-6e758ee"
+          expected_assets=191
+          release_id="$(gh api "repos/$repository/releases/tags/$release_tag" --jq .id)"
+          kept=0
+          deleted=0
+
+          while IFS=$'\t' read -r asset_id asset_name; do
+            if [[ "$asset_name" == *"$keep_marker"* ]]; then
+              ((kept += 1))
+            else
+              gh api --method DELETE "repos/$repository/releases/assets/$asset_id"
+              ((deleted += 1))
+            fi
+          done < <(gh api --paginate "repos/$repository/releases/$release_id/assets?per_page=100" --jq '.[] | [.id, .name] | @tsv')
+
+          remaining="$(gh api --paginate "repos/$repository/releases/$release_id/assets?per_page=100" --slurp --jq 'map(length) | add')"
+          printf 'kept=%s deleted=%s remaining=%s\n' "$kept" "$deleted" "$remaining"
+          if [[ "$kept" -ne "$expected_assets" || "$remaining" -ne "$expected_assets" ]]; then
+            echo "Release asset cleanup did not produce exactly $expected_assets current assets" >&2
+            exit 1
+          fi
