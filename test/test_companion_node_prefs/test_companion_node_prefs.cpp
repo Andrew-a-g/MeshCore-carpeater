@@ -8,8 +8,12 @@
 
 // The native companion preference target does not link the hardware-facing
 // CommonRadioPrefs implementation. These methods are not exercised here.
-bool CommonRadioPrefs::setByKey(const char*, const char*) { return false; }
-bool CommonRadioPrefs::getByKey(const char*, char*, size_t) { return false; }
+bool CommonRadioPrefs::setByKey(const char *, const char *) {
+  return false;
+}
+bool CommonRadioPrefs::getByKey(const char *, char *, size_t) {
+  return false;
+}
 
 class ReplayStream : public Stream {
   const char* _text;

@@ -1029,12 +1029,9 @@ struct FreqRange {
   uint32_t lower_freq, upper_freq;
 };
 
-static constexpr uint32_t STANDARD_REPEAT_FREQ_KHZ =
-    static_cast<uint32_t>((LORA_FREQ * 1000.0f) + 0.5f);
+static constexpr uint32_t STANDARD_REPEAT_FREQ_KHZ = static_cast<uint32_t>((LORA_FREQ * 1000.0f) + 0.5f);
 
-static FreqRange repeat_freq_ranges[] = {
-  { STANDARD_REPEAT_FREQ_KHZ, STANDARD_REPEAT_FREQ_KHZ }
-};
+static FreqRange repeat_freq_ranges[] = { { STANDARD_REPEAT_FREQ_KHZ, STANDARD_REPEAT_FREQ_KHZ } };
 
 bool MyMesh::isValidClientRepeatFreq(uint32_t f) const {
   for (int i = 0; i < sizeof(repeat_freq_ranges)/sizeof(repeat_freq_ranges[0]); i++) {
@@ -1428,7 +1425,7 @@ void MyMesh::handleCmdFrame(size_t len) {
     i += 4;
     uint8_t sf = cmd_frame[i++];
     uint8_t cr = cmd_frame[i++];
-    uint8_t repeat = _prefs.isRepeatEn() ? 1 : 0;  // preserve state for clients older than protocol v9
+    uint8_t repeat = _prefs.isRepeatEn() ? 1 : 0; // preserve state for clients older than protocol v9
     if (len > i) {
       repeat = cmd_frame[i++];   // FIRMWARE_VER_CODE  9+
     }
