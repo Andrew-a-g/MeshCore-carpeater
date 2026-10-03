@@ -16,6 +16,7 @@ jobs:
       matrix:
         target:
           - Heltec_mesh_solar_companion_radio_usb
+          - Heltec_mesh_solar_companion_radio_ble
           - Station_G2_companion_radio_ble
           - Station_G3_ESP32_companion_radio_ble
     steps:
