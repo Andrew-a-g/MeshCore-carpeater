@@ -980,6 +980,10 @@ void MyMesh::begin() {
   _store->loadPrefs(_prefs);
   sensors.node_lat = _prefs.node_lat;
   sensors.node_lon = _prefs.node_lon;
+  if (_prefs.isRepeatEn() && _prefs.freq != LORA_FREQ) {
+    _prefs.freq = LORA_FREQ;
+    savePrefs();
+  }
 
   // sanitise bad pref values
   _prefs.rx_delay_base = constrain(_prefs.rx_delay_base, 0, 20.0f);
