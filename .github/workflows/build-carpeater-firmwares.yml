@@ -1,0 +1,18 @@
+name: Build Carpeater Firmwares
+
+permissions:
+  contents: write
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'carpeater-*'
+
+jobs:
+  build-carpeater-firmwares:
+    uses: ./.github/workflows/firmware-builder.yml
+    with:
+      firmware_type: 'companion'
+      release_title_prefix: 'Carpeater Firmware'
+      release_draft: false
