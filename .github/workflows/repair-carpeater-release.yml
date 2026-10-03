@@ -6,7 +6,7 @@ permissions:
 on:
   push:
     tags:
-      - 'repair-carpeater-v1.0.0'
+      - 'repair*-carpeater-v1.0.0'
 
 jobs:
   build:
@@ -26,7 +26,7 @@ jobs:
         id: setup
         uses: ./.github/actions/setup-build-environment
       - name: Build Firmware
-        run: ./build.sh build-firmware ${{ matrix.target }}
+        run: FIRMWARE_VERSION="$GIT_TAG_VERSION" ./build.sh build-firmware ${{ matrix.target }}
       - name: Upload Workflow Artifacts
         uses: actions/upload-artifact@v7
         with:
