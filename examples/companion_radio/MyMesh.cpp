@@ -1100,7 +1100,7 @@ void MyMesh::handleCmdFrame(size_t len) {
                      (_prefs.telemetry_mode_base); // v5+
     out_frame[i++] = _prefs.manual_add_contacts;
 
-    uint32_t freq = _prefs.freq * 1000;
+    uint32_t freq = static_cast<uint32_t>((_prefs.freq * 1000.0f) + 0.5f);
     memcpy(&out_frame[i], &freq, 4);
     i += 4;
     uint32_t bw = _prefs.bw * 1000;
