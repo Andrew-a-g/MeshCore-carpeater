@@ -6,7 +6,7 @@ permissions:
 on:
   push:
     tags:
-      - 'repair-repeater-admin-v1.0.0'
+      - 'repair*-repeater-admin-v1.0.0'
 
 jobs:
   build:
@@ -17,7 +17,7 @@ jobs:
       - name: Setup Build Environment
         uses: ./.github/actions/setup-build-environment
       - name: Build ThinkNode M8 firmware
-        run: ./build.sh build-firmware ThinkNode_M8_repeater
+        run: FIRMWARE_VERSION="$GIT_TAG_VERSION" ./build.sh build-firmware ThinkNode_M8_repeater
       - name: Add repaired build to Repeater Admin release
         uses: softprops/action-gh-release@v2
         with:
