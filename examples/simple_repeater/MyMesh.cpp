@@ -59,6 +59,63 @@
 #define CLI_REPLY_DELAY_MILLIS      600
 
 #define LAZY_CONTACTS_WRITE_DELAY    5000
+#define CHANNEL_POLICY_FILE          "/channel_deny"
+#define CHANNEL_POLICY_BACKUP_FILE   "/channel_deny.bak"
+#define CHANNEL_CLI_REPLY_SIZE       157
+
+static bool readChannelPolicyFile(FILESYSTEM* fs, const char* path, uint8_t* data,
+                                  size_t capacity, size_t* length) {
+  *length = 0;
+#if defined(RP2040_PLATFORM)
+  File file = fs->open(path, "r");
+#else
+  File file = fs->open(path);
+#endif
+  if (!file) return false;
+  while (*length < capacity && file.available()) {
+    int value = file.read();
+    if (value < 0) break;
+    data[(*length)++] = value;
+  }
+  bool validSize = !file.available();
+  file.close();
+  return validSize;
+}
+
+static bool writeChannelPolicyFile(FILESYSTEM* fs, const char* path, const uint8_t* data,
+                                   size_t length) {
+#if defined(NRF52_PLATFORM) || defined(STM32_PLATFORM)
+  fs->remove(path);
+  File file = fs->open(path, FILE_O_WRITE);
+#elif defined(RP2040_PLATFORM)
+  File file = fs->open(path, "w");
+#else
+  File file = fs->open(path, "w", true);
+#endif
+  if (!file) return false;
+  bool success = file.write(data, length) == length;
+  file.close();
+  if (!success) fs->remove(path);
+  return success;
+}
+
+static bool parseOffset(const char* text, size_t* offset) {
+  if (text == NULL || offset == NULL) return false;
+  while (*text == ' ') text++;
+  if (*text == 0) {
+    *offset = 0;
+    return true;
+  }
+  size_t value = 0;
+  do {
+    if (*text < '0' || *text > '9' || value > 999) return false;
+    value = value * 10 + (*text++ - '0');
+  } while (*text && *text != ' ');
+  while (*text == ' ') text++;
+  if (*text != 0) return false;
+  *offset = value;
+  return true;
+}
 
 void MyMesh::putNeighbour(const mesh::Identity &id, uint32_t timestamp, float snr) {
 #if MAX_NEIGHBOURS // check if neighbours enabled
@@ -433,6 +490,17 @@ void MyMesh::sendFloodReply(mesh::Packet* packet, unsigned long delay_millis, ui
 
 bool MyMesh::allowPacketForward(const mesh::Packet *packet) {
   if (_prefs.disable_fwd) return false;
+  uint8_t type = packet->getPayloadType();
+  if (packet->isRouteDirect() &&
+      (type == PAYLOAD_TYPE_GRP_TXT || type == PAYLOAD_TYPE_GRP_DATA) &&
+      packet->payload_len > 0) {
+    channel_manager.observe(packet->payload[0], getRTCClock()->getCurrentTime());
+    const char* matchedName;
+    if (channel_manager.shouldDeny(packet, &matchedName)) {
+      MESH_DEBUG_PRINTLN("channel policy denied direct hash=%02X name=%s", packet->payload[0], matchedName);
+      return false;
+    }
+  }
   if (packet->isRouteFlood()
       && mesh::isFloodHopLimitExceeded(packet, _prefs.flood_max, _prefs.flood_max_unscoped, _prefs.flood_max_advert)) {
     return false;
@@ -456,6 +524,20 @@ bool MyMesh::allowPacketForward(const mesh::Packet *packet) {
     }
   }
   return true;
+}
+
+bool MyMesh::filterRecvFloodPacket(mesh::Packet* packet) {
+  uint8_t type = packet->getPayloadType();
+  if (type != PAYLOAD_TYPE_GRP_TXT && type != PAYLOAD_TYPE_GRP_DATA) return false;
+  if (packet->payload_len == 0) return false;
+
+  channel_manager.observe(packet->payload[0], getRTCClock()->getCurrentTime());
+  const char* matchedName;
+  if (channel_manager.shouldDeny(packet, &matchedName)) {
+    MESH_DEBUG_PRINTLN("channel policy denied hash=%02X name=%s", packet->payload[0], matchedName);
+    return true;
+  }
+  return false;
 }
 
 const char *MyMesh::getLogDateTime() {
@@ -941,9 +1023,76 @@ MyMesh::MyMesh(mesh::MainBoard &board, mesh::Radio &radio, mesh::MillisecondCloc
   memset(default_scope.key, 0, sizeof(default_scope.key));
 }
 
+bool MyMesh::loadChannelPolicy() {
+  channel_manager.clearDenied();
+  uint8_t data[REPEATER_CHANNEL_POLICY_MAX_SIZE];
+  const char* paths[] = {CHANNEL_POLICY_FILE, CHANNEL_POLICY_BACKUP_FILE};
+  bool found = false;
+  for (size_t i = 0; i < sizeof(paths) / sizeof(paths[0]); i++) {
+    if (!_fs->exists(paths[i])) continue;
+    found = true;
+    size_t length;
+    if (readChannelPolicyFile(_fs, paths[i], data, sizeof(data), &length) &&
+        channel_manager.deserializePolicy(data, length)) {
+      return true;
+    }
+  }
+  channel_manager.clearDenied();
+  return !found;
+}
+
+bool MyMesh::saveChannelPolicy() {
+  uint8_t data[REPEATER_CHANNEL_POLICY_MAX_SIZE];
+  size_t length;
+
+  // Preserve the last valid policy before replacing the primary file. If a
+  // write is interrupted or fails, boot-time loading falls back to this copy.
+  bool backupReady = false;
+  {
+    RepeaterChannelManager previous;
+    const char* oldPaths[] = {CHANNEL_POLICY_FILE, CHANNEL_POLICY_BACKUP_FILE};
+    for (size_t i = 0; i < sizeof(oldPaths) / sizeof(oldPaths[0]); i++) {
+      if (!_fs->exists(oldPaths[i])) continue;
+      if (readChannelPolicyFile(_fs, oldPaths[i], data, sizeof(data), &length) &&
+          previous.deserializePolicy(data, length)) {
+        if (strcmp(oldPaths[i], CHANNEL_POLICY_BACKUP_FILE) == 0) {
+          backupReady = true;
+        } else {
+          backupReady = writeChannelPolicyFile(_fs, CHANNEL_POLICY_BACKUP_FILE, data, length);
+          if (backupReady) {
+            backupReady = readChannelPolicyFile(_fs, CHANNEL_POLICY_BACKUP_FILE, data,
+                                                sizeof(data), &length) &&
+                          previous.deserializePolicy(data, length);
+          }
+        }
+        if (!backupReady) return false;
+        break;
+      }
+    }
+  }
+
+  length = channel_manager.serializePolicy(data, sizeof(data));
+  if (length == 0) return false;
+  if (!writeChannelPolicyFile(_fs, CHANNEL_POLICY_FILE, data, length)) return false;
+
+  {
+    RepeaterChannelManager verified;
+    if (!readChannelPolicyFile(_fs, CHANNEL_POLICY_FILE, data, sizeof(data), &length) ||
+        !verified.deserializePolicy(data, length)) {
+      _fs->remove(CHANNEL_POLICY_FILE);
+      return false;
+    }
+  }
+  _fs->remove(CHANNEL_POLICY_BACKUP_FILE);
+  return true;
+}
+
 void MyMesh::begin(FILESYSTEM *fs) {
   mesh::Mesh::begin();
   _fs = fs;
+  if (!loadChannelPolicy()) {
+    MESH_DEBUG_PRINTLN("channel deny policy missing or corrupt; forwarding all channels");
+  }
   // load persisted prefs
   _cli.loadPrefs(_fs);
   acl.load(_fs, self_id);
@@ -1194,6 +1343,71 @@ void MyMesh::clearStats() {
   ((SimpleMeshTables *)getTables())->resetStats();
 }
 
+void MyMesh::formatChannelsReply(size_t offset, char* reply) {
+  size_t total = channel_manager.getSeenCount();
+  if (offset >= total) {
+    strcpy(reply, "-none-");
+    return;
+  }
+
+  size_t pos = 0;
+  size_t index = offset;
+  uint32_t now = getRTCClock()->getCurrentTime();
+  while (index < total) {
+    RepeaterChannelManager::SeenChannel seen;
+    channel_manager.getSeen(index, &seen);
+    uint32_t age = now >= seen.lastSeen ? now - seen.lastSeen : 0;
+    const char* deniedName = channel_manager.deniedNameForHash(seen.hash);
+    char line[80];
+    int lineLength = deniedName
+                         ? snprintf(line, sizeof(line), "%02X seen=%u age=%lus deny-hash=%s", seen.hash,
+                                    seen.count, static_cast<unsigned long>(age), deniedName)
+                         : snprintf(line, sizeof(line), "%02X seen=%u age=%lus", seen.hash, seen.count,
+                                    static_cast<unsigned long>(age));
+    size_t separator = pos == 0 ? 0 : 1;
+    if (lineLength < 0 || pos + separator + lineLength >= 130) break;
+    if (separator) reply[pos++] = '\n';
+    memcpy(&reply[pos], line, lineLength);
+    pos += lineLength;
+    index++;
+  }
+  if (index < total) {
+    snprintf(&reply[pos], CHANNEL_CLI_REPLY_SIZE - pos, "%snext=%u", pos ? "\n" : "",
+             static_cast<unsigned>(index));
+  } else {
+    reply[pos] = 0;
+  }
+}
+
+void MyMesh::formatDeniedChannelsReply(size_t offset, char* reply) {
+  size_t total = channel_manager.getDeniedCount();
+  if (offset >= total) {
+    strcpy(reply, "-none-");
+    return;
+  }
+
+  size_t pos = 0;
+  size_t index = offset;
+  while (index < total) {
+    RepeaterChannelManager::DeniedChannel denied;
+    channel_manager.getDenied(index, &denied);
+    char line[40];
+    int lineLength = snprintf(line, sizeof(line), "%s %02X", denied.name, denied.hash);
+    size_t separator = pos == 0 ? 0 : 1;
+    if (lineLength < 0 || pos + separator + lineLength >= 130) break;
+    if (separator) reply[pos++] = '\n';
+    memcpy(&reply[pos], line, lineLength);
+    pos += lineLength;
+    index++;
+  }
+  if (index < total) {
+    snprintf(&reply[pos], CHANNEL_CLI_REPLY_SIZE - pos, "%snext=%u", pos ? "\n" : "",
+             static_cast<unsigned>(index));
+  } else {
+    reply[pos] = 0;
+  }
+}
+
 void MyMesh::handleCommand(uint32_t sender_timestamp, char *command, char *reply) {
   if (region_load_active) {
     if (StrHelper::isBlank(command)) {  // empty/blank line, signal to terminate 'load' operation
@@ -1237,8 +1451,54 @@ void MyMesh::handleCommand(uint32_t sender_timestamp, char *command, char *reply
     command += 3;
   }
 
+  // handle channel administration commands
+  size_t offset;
+  if (strcmp(command, "channels") == 0 || strncmp(command, "channels ", 9) == 0) {
+    if (!parseOffset(command + 8, &offset)) {
+      strcpy(reply, "Err - bad offset");
+    } else {
+      formatChannelsReply(offset, reply);
+    }
+  } else if (strcmp(command, "channel denied") == 0 || strncmp(command, "channel denied ", 15) == 0) {
+    if (!parseOffset(command + 14, &offset)) {
+      strcpy(reply, "Err - bad offset");
+    } else {
+      formatDeniedChannelsReply(offset, reply);
+    }
+  } else if (strncmp(command, "channel deny ", 13) == 0) {
+    const char* name = command + 13;
+    RepeaterChannelManager previous = channel_manager;
+    RepeaterChannelManager::DeniedChannel denied;
+    auto result = channel_manager.addDenied(name, &denied);
+    if (result == RepeaterChannelManager::ADD_INVALID) {
+      strcpy(reply, "Err - invalid hashtag");
+    } else if (result == RepeaterChannelManager::ADD_FULL) {
+      strcpy(reply, "Err - deny table full");
+    } else if (result == RepeaterChannelManager::ADD_OK && !saveChannelPolicy()) {
+      channel_manager = previous;
+      strcpy(reply, "Err - policy save failed");
+    } else {
+      snprintf(reply, CHANNEL_CLI_REPLY_SIZE, "OK - denied %s (%02X)", denied.name, denied.hash);
+    }
+  } else if (strncmp(command, "channel allow ", 14) == 0) {
+    const char* name = command + 14;
+    RepeaterChannelManager previous = channel_manager;
+    auto result = channel_manager.removeDenied(name);
+    if (result == RepeaterChannelManager::REMOVE_INVALID) {
+      strcpy(reply, "Err - invalid hashtag");
+    } else if (result == RepeaterChannelManager::REMOVE_NOT_FOUND) {
+      strcpy(reply, "Err - channel not denied");
+    } else if (!saveChannelPolicy()) {
+      channel_manager = previous;
+      strcpy(reply, "Err - policy save failed");
+    } else {
+      snprintf(reply, CHANNEL_CLI_REPLY_SIZE, "OK - allowed %s", name);
+    }
+  } else if (strcmp(command, "channel clear") == 0) {
+    channel_manager.clearSeen();
+    strcpy(reply, "OK - channel observations cleared");
   // handle ACL related commands
-  if (memcmp(command, "setperm ", 8) == 0) {   // format:  setperm {pubkey-hex} {permissions-int8}
+  } else if (memcmp(command, "setperm ", 8) == 0) {   // format:  setperm {pubkey-hex} {permissions-int8}
     char* hex = &command[8];
     char* sp = strchr(hex, ' ');   // look for separator char
     if (sp == NULL) {

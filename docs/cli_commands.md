@@ -6,6 +6,7 @@ This document provides an overview of CLI commands that can be sent to MeshCore 
 
 - [Operational](#operational)
 - [Neighbors](#neighbors-repeater-only)
+- [Channel Administration](#channel-administration-repeater-only)
 - [Statistics](#statistics)
 - [Logging](#logging)
 - [Information](#info)
@@ -126,6 +127,56 @@ This document provides an overview of CLI commands that can be sent to MeshCore 
 
 **Usage:** 
 - `discover.neighbors`
+
+---
+
+## Channel Administration (Repeater Only)
+
+Channel observations are kept in bounded RAM and reset on reboot. Deny entries are stored in the
+repeater filesystem and survive reboot. Forwarding remains enabled by default for every channel not
+matched by an exact deny entry. A missing or corrupt deny file fails open and does not block channels.
+
+### List observed channels
+
+**Usage:** `channels [offset]`
+
+Returns a bounded page, newest first. Unknown channels are identified only by their one-byte on-air
+hash, for example `7A seen=3 age=8s`. A hash shared by a configured deny may be shown as
+`D9 seen=42 age=15s deny-hash=#test`. This is a hash-level hint, not proof of the channel name;
+one-byte hashes can collide. Use the value in `next=<offset>` to request another page.
+
+### Deny a public hashtag channel
+
+**Usage:** `channel deny #name`
+
+Derives and persistently stores the public hashtag key. Example response: `OK - denied #test (D9)`.
+Adding an existing entry is idempotent. Names must begin with `#`, fit in 31 bytes, and contain only
+letters, digits, `-`, `_`, or `.` after the hash.
+
+### Allow a previously denied channel
+
+**Usage:** `channel allow #name`
+
+Removes the exact named persistent deny entry. It does not clear observation counters.
+
+### List denied channels
+
+**Usage:** `channel denied [offset]`
+
+Returns persistent entries as `#name HH`, with `next=<offset>` when another page is available.
+
+### Clear channel observations
+
+**Usage:** `channel clear`
+
+Clears only uptime-scoped observation counters. Persistent deny entries are unchanged.
+
+Channel names are encrypted and are not transmitted in group packets, so a repeater cannot discover
+or guess the name behind an unknown hash. Supplying a public hashtag lets the repeater derive its
+key and verify the packet MAC before dropping it; packets from another channel with the same
+one-byte hash continue to be forwarded. Private-channel denial is not supported by these commands.
+
+These commands are available on serial and through the existing authenticated remote repeater CLI.
 
 ---
 

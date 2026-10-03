@@ -34,6 +34,7 @@
 #include <helpers/StatsFormatHelper.h>
 #include <helpers/TxtDataHelpers.h>
 #include <helpers/RegionMap.h>
+#include <helpers/RepeaterChannelManager.h>
 #include <helpers/RoutingPolicy.h>
 #include "RateLimiter.h"
 
@@ -92,6 +93,7 @@ class MyMesh : public mesh::Mesh, public CommonCLICallbacks {
   uint8_t reply_path_len;
   TransportKeyStore key_store;
   RegionMap region_map, temp_map;
+  RepeaterChannelManager channel_manager;
   RegionEntry* load_stack[8];
   RegionEntry* recv_pkt_region;
   TransportKey default_scope;
@@ -125,6 +127,10 @@ class MyMesh : public mesh::Mesh, public CommonCLICallbacks {
   mesh::Packet* createSelfAdvert();
 
   File openAppend(const char* fname);
+  bool loadChannelPolicy();
+  bool saveChannelPolicy();
+  void formatChannelsReply(size_t offset, char* reply);
+  void formatDeniedChannelsReply(size_t offset, char* reply);
   bool isLooped(const mesh::Packet* packet, const uint8_t max_counters[]);
 
 protected:
@@ -133,6 +139,7 @@ protected:
   }
 
   bool allowPacketForward(const mesh::Packet* packet) override;
+  bool filterRecvFloodPacket(mesh::Packet* packet) override;
   const char* getLogDateTime() override;
   void logRxRaw(float snr, float rssi, const uint8_t raw[], int len) override;
 
