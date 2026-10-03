@@ -6,6 +6,11 @@
 
 #include "../../examples/companion_radio/NodePrefs.h"
 
+// The native companion preference target does not link the hardware-facing
+// CommonRadioPrefs implementation. These methods are not exercised here.
+bool CommonRadioPrefs::setByKey(const char*, const char*) { return false; }
+bool CommonRadioPrefs::getByKey(const char*, char*, size_t) { return false; }
+
 class ReplayStream : public Stream {
   const char* _text;
   int _pos = 0;
@@ -49,6 +54,25 @@ public:
 
   const std::string& text() const { return _text; }
 };
+
+TEST(CompanionNodePrefs, RepeatIsEnabledByDefault) {
+  NodePrefs prefs;
+
+  EXPECT_TRUE(prefs.isRepeatEn());
+}
+
+TEST(CompanionNodePrefs, ExplicitRepeatDisablePersists) {
+  NodePrefs saved;
+  saved.setRepeatEn(false);
+
+  CaptureStream output;
+  ASSERT_TRUE(saved.saveSerial(output));
+
+  NodePrefs loaded;
+  ReplayStream input(output.text().c_str());
+  ASSERT_TRUE(loaded.loadSerial(input));
+  EXPECT_FALSE(loaded.isRepeatEn());
+}
 
 #if 0
 // Re-enable test once we can SET fem_ values in companion
