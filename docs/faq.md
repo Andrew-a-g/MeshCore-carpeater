@@ -563,12 +563,12 @@ Javascript: <https://github.com/liamcottle/meshcore.js>
 
 MeshCore would not be best suited to ATAK because MeshCore:
 
-- standard clients do not repeat and therefore you would need a network of repeaters in place
+- clients do not repeat and therefore you would need a network of repeaters in place
 - will not have a stable path where all clients are constantly moving between repeaters
 
 MeshCore clients would need to reset path constantly and flood traffic across the network which could lead to lots of collisions with something as chatty as ATAK.
 
-The Carpeater fork provides repeating companion firmware, but ATAK support is still not currently on MeshCore's roadmap.
+This could change in the future if MeshCore develops a client firmware that repeats.
 
 [Source](https://discord.com/channels/826570251612323860/1330643963501351004/1354780032140054659)
 
