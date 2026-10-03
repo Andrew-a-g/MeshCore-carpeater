@@ -1,4 +1,5 @@
 #include "MyMesh.h"
+#include "RepeatPolicy.h"
 
 #include <Arduino.h> // needed for PlatformIO
 #ifdef ENABLE_WIFI_INTERFACE
@@ -1429,12 +1430,13 @@ void MyMesh::handleCmdFrame(size_t len) {
     i += 4;
     uint8_t sf = cmd_frame[i++];
     uint8_t cr = cmd_frame[i++];
-    uint8_t repeat = _prefs.isRepeatEn() ? 1 : 0; // preserve state for clients older than protocol v9
-    if (len > i) {
-      repeat = cmd_frame[i++];   // FIRMWARE_VER_CODE  9+
-    }
+    const bool has_repeat = len > i;
+    const bool requested_repeat = has_repeat ? cmd_frame[i++] != 0 : false;   // FIRMWARE_VER_CODE  9+
+    const bool repeat_frequency = isValidClientRepeatFreq(freq);
+    const bool repeat =
+        resolveRepeatForRadioRequest(_prefs.isRepeatEn(), has_repeat, requested_repeat, repeat_frequency);
 
-    if (repeat && !isValidClientRepeatFreq(freq)) {
+    if (repeat && !repeat_frequency) {
       writeErrFrame(ERR_CODE_ILLEGAL_ARG);
     } else if (freq >= 150000 && freq <= 2500000 && sf >= 5 && sf <= 12 && cr >= 5 && cr <= 8 && bw >= 7000 &&
         bw <= 500000) {
