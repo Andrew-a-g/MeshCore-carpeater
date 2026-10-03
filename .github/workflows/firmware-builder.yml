@@ -43,7 +43,6 @@ jobs:
   build:
     needs: generate-build-matrix
     runs-on: ubuntu-latest
-    continue-on-error: true # don't fail entire build if one board fails to build
     strategy:
       matrix:
         target: ${{ fromJson(needs.generate-build-matrix.outputs.targets) }}
@@ -85,10 +84,51 @@ jobs:
           merge-multiple: true
           path: out
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v3
-        with:
-          name: "${{ inputs.release_title_prefix }} ${{ env.GIT_TAG_VERSION }}"
-          body: ""
-          draft: ${{ inputs.release_draft }}
-          files: out/*
+      - name: Create or update release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          title="${{ inputs.release_title_prefix }} $GIT_TAG_VERSION"
+          draft="${{ inputs.release_draft }}"
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release edit "$tag" --title "$title" --draft="$draft"
+          elif [[ "$draft" == "true" ]]; then
+            gh release create "$tag" --title "$title" --notes "" --draft
+          else
+            gh release create "$tag" --title "$title" --notes ""
+          fi
+
+          shopt -s nullglob
+          files=(out/*)
+          if (( ${#files[@]} == 0 )); then
+            echo "No firmware assets were downloaded" >&2
+            exit 1
+          fi
+
+          batch_size=10
+          for ((offset = 0; offset < ${#files[@]}; offset += batch_size)); do
+            batch=("${files[@]:offset:batch_size}")
+            uploaded=false
+            for attempt in 1 2 3; do
+              if gh release upload "$tag" "${batch[@]}" --clobber; then
+                uploaded=true
+                break
+              fi
+              sleep $((attempt * 5))
+            done
+            if [[ "$uploaded" != true ]]; then
+              echo "Failed to upload release asset batch at offset $offset" >&2
+              exit 1
+            fi
+          done
+
+          release_id="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" --jq .id)"
+          remote_count="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$release_id/assets?per_page=100" --slurp --jq 'map(length) | add')"
+          if [[ "$remote_count" -ne "${#files[@]}" ]]; then
+            echo "Release has $remote_count assets; expected ${#files[@]}" >&2
+            exit 1
+          fi
