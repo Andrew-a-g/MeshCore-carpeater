@@ -1469,7 +1469,7 @@ void MyMesh::handleCommand(uint32_t sender_timestamp, char *command, char *reply
     RepeaterChannelManager::DeniedChannel denied;
     auto result = channel_manager.addDenied(name, &denied);
     if (result == RepeaterChannelManager::ADD_INVALID) {
-      strcpy(reply, "Err - invalid hashtag");
+      strcpy(reply, "Err - invalid channel");
     } else if (result == RepeaterChannelManager::ADD_FULL) {
       strcpy(reply, "Err - deny table full");
     } else if (result == RepeaterChannelManager::ADD_OK && !saveChannelPolicy()) {
@@ -1483,7 +1483,7 @@ void MyMesh::handleCommand(uint32_t sender_timestamp, char *command, char *reply
     RepeaterChannelManager previous = channel_manager;
     auto result = channel_manager.removeDenied(name);
     if (result == RepeaterChannelManager::REMOVE_INVALID) {
-      strcpy(reply, "Err - invalid hashtag");
+      strcpy(reply, "Err - invalid channel");
     } else if (result == RepeaterChannelManager::REMOVE_NOT_FOUND) {
       strcpy(reply, "Err - channel not denied");
     } else if (!saveChannelPolicy()) {

@@ -7,18 +7,29 @@
 #include <cstring>
 
 namespace {
-mesh::Packet groupPacket(const char* name, uint8_t type = PAYLOAD_TYPE_GRP_TXT) {
+mesh::Packet groupPacketWithKey(const uint8_t key[CIPHER_KEY_SIZE], uint8_t hash,
+                                uint8_t type = PAYLOAD_TYPE_GRP_TXT) {
   mesh::Packet packet;
-  uint8_t key[CIPHER_KEY_SIZE];
-  uint8_t hash;
-  EXPECT_TRUE(RepeaterChannelManager::derivePublicChannel(name, key, &hash));
   uint8_t secret[PUB_KEY_SIZE] = {};
-  memcpy(secret, key, sizeof(key));
+  memcpy(secret, key, CIPHER_KEY_SIZE);
   packet.header = (type << PH_TYPE_SHIFT) | ROUTE_TYPE_FLOOD;
   packet.payload[0] = hash;
   const uint8_t data[] = {1, 2, 3, 4, 0, 'x'};
   packet.payload_len = 1 + mesh::Utils::encryptThenMAC(secret, &packet.payload[1], data, sizeof(data));
   return packet;
+}
+
+mesh::Packet groupPacket(const char* name, uint8_t type = PAYLOAD_TYPE_GRP_TXT) {
+  uint8_t key[CIPHER_KEY_SIZE];
+  uint8_t hash;
+  EXPECT_TRUE(RepeaterChannelManager::derivePublicChannel(name, key, &hash));
+  return groupPacketWithKey(key, hash, type);
+}
+
+mesh::Packet publicGroupPacket(uint8_t type = PAYLOAD_TYPE_GRP_TXT) {
+  const uint8_t key[CIPHER_KEY_SIZE] = {0x8b, 0x33, 0x87, 0xe9, 0xc5, 0xcd, 0xea, 0x6a,
+                                        0xc9, 0xe5, 0xed, 0xba, 0xa1, 0x15, 0xcd, 0x72};
+  return groupPacketWithKey(key, 0x11, type);
 }
 } // namespace
 
@@ -114,6 +125,43 @@ TEST(RepeaterChannelManagerTest, DeniesOnlyAuthenticatedGroupPackets) {
   EXPECT_TRUE(manager.shouldDeny(&packet));
 }
 
+TEST(RepeaterChannelManagerTest, DeniesStandardPublicChannelBySpecialName) {
+  RepeaterChannelManager manager;
+  RepeaterChannelManager::DeniedChannel denied;
+  ASSERT_EQ(RepeaterChannelManager::ADD_OK, manager.addDenied("public", &denied));
+  EXPECT_STREQ("public", denied.name);
+  EXPECT_EQ(0x11, denied.hash);
+
+  mesh::Packet packet = publicGroupPacket();
+  const char* matched = nullptr;
+  EXPECT_TRUE(manager.shouldDeny(&packet, &matched));
+  ASSERT_NE(nullptr, matched);
+  EXPECT_STREQ("public", matched);
+
+  packet.header = (PAYLOAD_TYPE_GRP_TXT << PH_TYPE_SHIFT) | ROUTE_TYPE_DIRECT;
+  EXPECT_TRUE(manager.shouldDeny(&packet));
+  packet.header = (PAYLOAD_TYPE_GRP_TXT << PH_TYPE_SHIFT) | ROUTE_TYPE_FLOOD;
+  packet.payload[1] ^= 1;
+  EXPECT_FALSE(manager.shouldDeny(&packet));
+  EXPECT_EQ(RepeaterChannelManager::REMOVE_OK, manager.removeDenied("public"));
+  mesh::Packet allowed = publicGroupPacket();
+  EXPECT_FALSE(manager.shouldDeny(&allowed));
+}
+
+TEST(RepeaterChannelManagerTest, PublicPolicyNameIsExact) {
+  RepeaterChannelManager manager;
+  EXPECT_EQ(RepeaterChannelManager::ADD_INVALID, manager.addDenied("Public"));
+  EXPECT_EQ(RepeaterChannelManager::ADD_INVALID, manager.addDenied("#public\n"));
+}
+
+TEST(RepeaterChannelManagerTest, PublicHashCollisionWithInvalidMacIsAllowed) {
+  RepeaterChannelManager manager;
+  ASSERT_EQ(RepeaterChannelManager::ADD_OK, manager.addDenied("public"));
+  mesh::Packet packet = groupPacket("#other");
+  packet.payload[0] = 0x11;
+  EXPECT_FALSE(manager.shouldDeny(&packet));
+}
+
 TEST(RepeaterChannelManagerTest, HashCollisionWithInvalidMacIsAllowed) {
   RepeaterChannelManager manager;
   ASSERT_EQ(RepeaterChannelManager::ADD_OK, manager.addDenied("#test"));
@@ -142,13 +190,14 @@ TEST(RepeaterChannelManagerTest, PolicyRoundTripDoesNotPersistSeenState) {
   source.observe(0xD9, 42);
   source.addDenied("#test");
   source.addDenied("#another");
+  source.addDenied("public");
   uint8_t bytes[REPEATER_CHANNEL_POLICY_MAX_SIZE];
   size_t length = source.serializePolicy(bytes, sizeof(bytes));
   ASSERT_GT(length, 0U);
 
   RepeaterChannelManager loaded;
   ASSERT_TRUE(loaded.deserializePolicy(bytes, length));
-  EXPECT_EQ(2U, loaded.getDeniedCount());
+  EXPECT_EQ(3U, loaded.getDeniedCount());
   EXPECT_EQ(0U, loaded.getSeenCount());
   RepeaterChannelManager::DeniedChannel entry;
   ASSERT_TRUE(loaded.getDenied(0, &entry));

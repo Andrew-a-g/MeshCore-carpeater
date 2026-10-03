@@ -6,6 +6,12 @@
 namespace {
 const uint8_t POLICY_MAGIC[] = {'R', 'C', 'D', 'P'};
 const uint8_t POLICY_VERSION = 1;
+const char PUBLIC_CHANNEL_POLICY_NAME[] = "public";
+// Decoded MeshCore PUBLIC_GROUP_PSK: izOH6cXN6mrJ5e26oRXNcg==
+const uint8_t PUBLIC_CHANNEL_KEY[CIPHER_KEY_SIZE] = {
+    0x8b, 0x33, 0x87, 0xe9, 0xc5, 0xcd, 0xea, 0x6a,
+    0xc9, 0xe5, 0xed, 0xba, 0xa1, 0x15, 0xcd, 0x72,
+};
 
 uint32_t policyCrc32(const uint8_t* data, size_t length) {
   uint32_t crc = 0xFFFFFFFFU;
@@ -37,6 +43,16 @@ bool RepeaterChannelManager::derivePublicChannel(const char* name, uint8_t key[C
   mesh::Utils::sha256(key, CIPHER_KEY_SIZE, reinterpret_cast<const uint8_t*>(name), len);
   mesh::Utils::sha256(hash, 1, key, CIPHER_KEY_SIZE);
   return true;
+}
+
+bool RepeaterChannelManager::deriveDenyTarget(const char* name, uint8_t key[CIPHER_KEY_SIZE],
+                                               uint8_t* hash) {
+  if (name != NULL && strcmp(name, PUBLIC_CHANNEL_POLICY_NAME) == 0) {
+    memcpy(key, PUBLIC_CHANNEL_KEY, sizeof(PUBLIC_CHANNEL_KEY));
+    mesh::Utils::sha256(hash, 1, key, CIPHER_KEY_SIZE);
+    return true;
+  }
+  return derivePublicChannel(name, key, hash);
 }
 
 bool RepeaterChannelManager::isValidGroupPacket(const mesh::Packet* packet) {
@@ -103,7 +119,7 @@ RepeaterChannelManager::AddResult RepeaterChannelManager::addDenied(const char* 
                                                                      DeniedChannel* result) {
   uint8_t key[CIPHER_KEY_SIZE];
   uint8_t hash;
-  if (!derivePublicChannel(name, key, &hash)) return ADD_INVALID;
+  if (!deriveDenyTarget(name, key, &hash)) return ADD_INVALID;
   int empty = -1;
   for (int i = 0; i < MAX_DENIED_CHANNELS; i++) {
     if (denied[i].occupied && strcmp(denied[i].name, name) == 0) {
@@ -125,7 +141,7 @@ RepeaterChannelManager::AddResult RepeaterChannelManager::addDenied(const char* 
 RepeaterChannelManager::RemoveResult RepeaterChannelManager::removeDenied(const char* name) {
   uint8_t key[CIPHER_KEY_SIZE];
   uint8_t hash;
-  if (!derivePublicChannel(name, key, &hash)) return REMOVE_INVALID;
+  if (!deriveDenyTarget(name, key, &hash)) return REMOVE_INVALID;
   for (int i = 0; i < MAX_DENIED_CHANNELS; i++) {
     if (denied[i].occupied && strcmp(denied[i].name, name) == 0) {
       memset(&denied[i], 0, sizeof(denied[i]));

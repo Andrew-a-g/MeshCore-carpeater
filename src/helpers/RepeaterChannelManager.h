@@ -58,6 +58,8 @@ public:
   bool deserializePolicy(const uint8_t* src, size_t length);
 
 private:
+  static bool deriveDenyTarget(const char* name, uint8_t key[CIPHER_KEY_SIZE], uint8_t* hash);
+
   SeenChannel seen[MAX_TRACKED_CHANNELS];
   DeniedChannel denied[MAX_DENIED_CHANNELS];
 };

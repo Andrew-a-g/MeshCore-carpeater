@@ -145,17 +145,19 @@ hash, for example `7A seen=3 age=8s`. A hash shared by a configured deny may be 
 `D9 seen=42 age=15s deny-hash=#test`. This is a hash-level hint, not proof of the channel name;
 one-byte hashes can collide. Use the value in `next=<offset>` to request another page.
 
-### Deny a public hashtag channel
+### Deny a public channel
 
-**Usage:** `channel deny #name`
+**Usage:** `channel deny #name` or `channel deny public`
 
 Derives and persistently stores the public hashtag key. Example response: `OK - denied #test (D9)`.
 Adding an existing entry is idempotent. Names must begin with `#`, fit in 31 bytes, and must not
 contain ASCII control characters. Spaces, punctuation, and UTF-8 bytes are hashed exactly as entered.
+The special lowercase name `public` selects MeshCore's standard Public channel and returns
+`OK - denied public (11)`.
 
 ### Allow a previously denied channel
 
-**Usage:** `channel allow #name`
+**Usage:** `channel allow #name` or `channel allow public`
 
 Removes the exact named persistent deny entry. It does not clear observation counters.
 
@@ -163,7 +165,7 @@ Removes the exact named persistent deny entry. It does not clear observation cou
 
 **Usage:** `channel denied [offset]`
 
-Returns persistent entries as `#name HH`, with `next=<offset>` when another page is available.
+Returns persistent entries as `#name HH` or `public 11`, with `next=<offset>` when another page is available.
 
 ### Clear channel observations
 
@@ -173,8 +175,9 @@ Clears only uptime-scoped observation counters. Persistent deny entries are unch
 
 Channel names are encrypted and are not transmitted in group packets, so a repeater cannot discover
 or guess the name behind an unknown hash. Supplying a public hashtag lets the repeater derive its
-key and verify the packet MAC before dropping it; packets from another channel with the same
-one-byte hash continue to be forwarded. Private-channel denial is not supported by these commands.
+key; the special `public` target uses MeshCore's fixed standard Public-channel key. In both cases the
+repeater verifies the packet MAC before dropping it, so packets from another channel with the same
+one-byte hash continue to be forwarded. Other private-channel denial is not supported by these commands.
 
 These commands are available on serial and through the existing authenticated remote repeater CLI.
 
